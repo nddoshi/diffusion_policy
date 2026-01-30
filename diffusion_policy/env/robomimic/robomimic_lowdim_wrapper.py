@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 import numpy as np
-import gym
+import gymnasium as gym
 from gym.spaces import Box
 from robomimic.envs.env_robosuite import EnvRobosuite
 

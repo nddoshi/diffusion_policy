@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Optional
 import numpy as np
-import gym
+import gymnasium as gym
 from gym.spaces import Box
 from diffusion_policy.env.kitchen.base import KitchenBase
 

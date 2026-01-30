@@ -1,7 +1,7 @@
 from typing import List, Optional
 from matplotlib.pyplot import fill
 import numpy as np
-import gym
+import gymnasium as gym
 from gym import spaces
 from omegaconf import OmegaConf
 from robomimic.envs.env_robosuite import EnvRobosuite

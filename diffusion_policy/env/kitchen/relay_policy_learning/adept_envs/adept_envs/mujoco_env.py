@@ -22,7 +22,7 @@ import os
 import time
 from typing import Dict, Optional
 
-import gym
+import gymnasium as gym
 from gym import spaces
 from gym.utils import seeding
 import numpy as np

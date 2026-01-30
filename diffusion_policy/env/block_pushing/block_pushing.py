@@ -21,7 +21,7 @@ import math
 import time
 from typing import Dict, List, Optional, Tuple, Union
 
-import gym
+import gymnasium as gym
 from gym import spaces
 from gym.envs import registration
 from diffusion_policy.env.block_pushing.utils import utils_pybullet

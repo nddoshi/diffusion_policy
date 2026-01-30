@@ -12,15 +12,15 @@ import sys
 from enum import Enum
 from copy import deepcopy
 
-from gym import logger
-from gym.vector.vector_env import VectorEnv
-from gym.error import (
+from gymnasium import logger
+from gymnasium.vector.vector_env import VectorEnv
+from gymnasium.error import (
     AlreadyPendingCallError,
     NoAsyncCallError,
     ClosedEnvironmentError,
     CustomSpaceError,
 )
-from gym.vector.utils import (
+from gymnasium.vector.utils import (
     create_shared_memory,
     create_empty_array,
     write_to_shared_memory,
@@ -186,7 +186,7 @@ class AsyncVectorEnv(VectorEnv):
         _, successes = zip(*[pipe.recv() for pipe in self.parent_pipes])
         self._raise_if_errors(successes)
 
-    def reset_async(self):
+    def reset_async(self, seed=None, options=None):
         self._assert_is_running()
         if self._state != AsyncState.DEFAULT:
             raise AlreadyPendingCallError(
@@ -199,13 +199,17 @@ class AsyncVectorEnv(VectorEnv):
             pipe.send(("reset", None))
         self._state = AsyncState.WAITING_RESET
 
-    def reset_wait(self, timeout=None):
+    def reset_wait(self, timeout=None, seed=None, options=None):
         """
         Parameters
         ----------
         timeout : int or float, optional
             Number of seconds before the call to `reset_wait` times out. If
             `None`, the call to `reset_wait` never times out.
+        seed : int or sequence of ints, optional
+            Random seed(s) for the environments (ignored in this implementation).
+        options : dict, optional
+            Additional options for reset (ignored in this implementation).
         Returns
         -------
         observations : sample from `observation_space`
@@ -230,8 +234,20 @@ class AsyncVectorEnv(VectorEnv):
         self._state = AsyncState.DEFAULT
 
         if not self.shared_memory:
+            # Debug: check what we're getting
+            if results and len(results) > 0:
+                first_result = results[0]
+                if isinstance(first_result, tuple):
+                    print(f"DEBUG: Received tuple result: {type(first_result)}, length: {len(first_result)}")
+                    if len(first_result) > 0:
+                        print(f"DEBUG: First element type: {type(first_result[0])}")
+                else:
+                    print(f"DEBUG: Received non-tuple result: {type(first_result)}")
+            
+            # The concatenate function expects a list of observations, not results
+            # results is what we got from workers, which should be observations
             self.observations = concatenate(
-                results, self.observations, self.single_observation_space
+                self.single_observation_space, results, self.observations
             )
 
         return deepcopy(self.observations) if self.copy else self.observations
@@ -294,13 +310,13 @@ class AsyncVectorEnv(VectorEnv):
 
         if not self.shared_memory:
             self.observations = concatenate(
-                observations_list, self.observations, self.single_observation_space
+                self.single_observation_space, observations_list, self.observations
             )
 
         return (
             deepcopy(self.observations) if self.copy else self.observations,
             np.array(rewards),
-            np.array(dones, dtype=np.bool_),
+            np.array(dones, dtype=bool),
             infos,
         )
 
@@ -567,15 +583,32 @@ def _worker(index, env_fn, pipe, parent_pipe, shared_memory, error_queue):
         while True:
             command, data = pipe.recv()
             if command == "reset":
-                observation = env.reset()
+                result = env.reset()
+                if isinstance(result, tuple) and len(result) == 2:
+                    # New gymnasium API: (obs, info)
+                    observation, info = result
+                else:
+                    # Old gym API: just obs
+                    observation = result
                 pipe.send((observation, True))
             elif command == "step":
-                observation, reward, done, info = env.step(data)
+                result = env.step(data)
+                if len(result) == 5:
+                    # New gymnasium API: (obs, reward, terminated, truncated, info)
+                    observation, reward, terminated, truncated, info = result
+                    done = terminated or truncated
+                elif len(result) == 4:
+                    # Old gym API: (obs, reward, done, info)
+                    observation, reward, done, info = result
+                else:
+                    raise ValueError(f"Unexpected step result format: {len(result)} values")
                 # if done:
                 #     observation = env.reset()
                 pipe.send(((observation, reward, done, info), True))
             elif command == "seed":
-                env.seed(data)
+                # Gymnasium deprecated env.seed(), but keep for compatibility
+                if hasattr(env, 'seed'):
+                    env.seed(data)
                 pipe.send((None, True))
             elif command == "close":
                 pipe.send((None, True))
@@ -621,13 +654,28 @@ def _worker_shared_memory(index, env_fn, pipe, parent_pipe, shared_memory, error
         while True:
             command, data = pipe.recv()
             if command == "reset":
-                observation = env.reset()
+                result = env.reset()
+                if isinstance(result, tuple) and len(result) == 2:
+                    # New gymnasium API: (obs, info)
+                    observation, info = result
+                else:
+                    # Old gym API: just obs
+                    observation = result
                 write_to_shared_memory(
                     index, observation, shared_memory, observation_space
                 )
                 pipe.send((None, True))
             elif command == "step":
-                observation, reward, done, info = env.step(data)
+                result = env.step(data)
+                if len(result) == 5:
+                    # New gymnasium API: (obs, reward, terminated, truncated, info)
+                    observation, reward, terminated, truncated, info = result
+                    done = terminated or truncated
+                elif len(result) == 4:
+                    # Old gym API: (obs, reward, done, info)
+                    observation, reward, done, info = result
+                else:
+                    raise ValueError(f"Unexpected step result format: {len(result)} values")
                 # if done:
                 #     observation = env.reset()
                 write_to_shared_memory(
@@ -635,7 +683,9 @@ def _worker_shared_memory(index, env_fn, pipe, parent_pipe, shared_memory, error
                 )
                 pipe.send(((None, reward, done, info), True))
             elif command == "seed":
-                env.seed(data)
+                # Gymnasium deprecated env.seed(), but keep for compatibility
+                if hasattr(env, 'seed'):
+                    env.seed(data)
                 pipe.send((None, True))
             elif command == "close":
                 pipe.send((None, True))
