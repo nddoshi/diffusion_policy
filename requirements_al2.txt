@@ -18,7 +18,7 @@ scikit-video==1.1.11
 scikit-image==0.19.3
 gymnasium==0.26.3
 pymunk==6.2.1
-wandb==0.13.3
+wandb==0.16.6
 threadpoolctl==3.1.0
 shapely==1.8.4
 cython==0.29.32
@@ -34,10 +34,12 @@ accelerate==0.13.2
 datasets==2.6.1
 diffusers==0.11.1
 av==12.0.0
+pyarrow==14.0.1
+huggingface_hub==0.10.1
 ray[default,tune]==2.2.0
 pygame==2.1.2
-# robomimic==0.2.0  # Install separately without egl_probe dependency
 pytorchvideo==0.1.5
 atomics==1.0.2
+robomimic==0.2.0
 r3m @ https://github.com/facebookresearch/r3m/archive/b2334e726887fa0206962d7984c69c5fb09cceab.tar.gz
 dm-control==1.0.9
