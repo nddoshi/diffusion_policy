@@ -1,0 +1,30 @@
+name: box_touch_image
+
+# Image: (3, 240, 360) from front_camera
+# agent_pos: joint positions (7)
+# action: target joint positions (7)
+image_shape: &image_shape [3, 240, 360]
+shape_meta: &shape_meta
+  obs:
+    image:
+      shape: *image_shape
+      type: rgb
+    agent_pos:
+      shape: [7]
+      type: low_dim
+  action:
+    shape: [7]
+
+env_runner:
+  # No env runner yet — evaluation during training is disabled.
+  # To add evaluation, create a BoxTouchImageRunner and reference it here.
+  _target_: diffusion_policy.env_runner.base_image_runner.BaseImageRunner
+
+dataset:
+  _target_: diffusion_policy.dataset.box_touch_image_dataset.BoxTouchImageDataset
+  zarr_path: data/box_touch/box_touch.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.02

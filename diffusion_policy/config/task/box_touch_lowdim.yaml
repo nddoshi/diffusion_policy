@@ -1,0 +1,21 @@
+name: box_touch_lowdim
+
+# obs: joint_pos(7) + joint_vel(7) + ee_pos(3) + box_pos(3) + box_size(3) = 23
+# action: target joint positions (7)
+obs_dim: 23
+action_dim: 7
+keypoint_dim: 3
+
+env_runner:
+  # No env runner yet — evaluation during training is disabled.
+  # To add evaluation, create a BoxTouchLowdimRunner and reference it here.
+  _target_: diffusion_policy.env_runner.base_lowdim_runner.BaseLowdimRunner
+
+dataset:
+  _target_: diffusion_policy.dataset.box_touch_lowdim_dataset.BoxTouchLowdimDataset
+  zarr_path: data/box_touch/box_touch.zarr
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.02

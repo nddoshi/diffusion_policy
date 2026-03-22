@@ -30,6 +30,9 @@ BOX_SIZE_MIN = 0.02  # minimum half-extent per dimension
 BOX_SIZE_MAX = 0.08  # maximum half-extent per dimension
 BOX_POS_MARGIN = 0.05  # margin from table edge for box placement
 
+# Default fixed box half-extents (used when randomize_box_size=False)
+DEFAULT_BOX_HALF_SIZE = np.array([0.04, 0.04, 0.04])
+
 # Reward parameters
 TOUCH_BONUS = 10.0       # NDD/RHJIANG: WHY IS THIS NEEDED. 
 DISTANCE_SCALE = 1.0
@@ -64,6 +67,8 @@ class BoxTouchEnv(gym.Env):
         render_hw: tuple = DEFAULT_RENDER_SIZE,
         box_size_range: tuple = (BOX_SIZE_MIN, BOX_SIZE_MAX),
         reward_type: str = 'dense',  # 'dense' or 'sparse'
+        randomize_box_size: bool = True,
+        fixed_box_half_size: np.ndarray = None,
     ):
         """
         Args:
@@ -72,12 +77,21 @@ class BoxTouchEnv(gym.Env):
             render_hw: (height, width) for rendering.
             box_size_range: (min, max) half-extent for box size randomization.
             reward_type: 'dense' for distance-based reward, 'sparse' for binary.
+            randomize_box_size: If True, randomize box size each reset. 
+                If False, use fixed_box_half_size.
+            fixed_box_half_size: Fixed box half-extents when randomize_box_size=False.
+                Defaults to DEFAULT_BOX_HALF_SIZE.
         """
         self.frame_skip = frame_skip
         self.max_episode_steps = max_episode_steps
         self.render_hw = render_hw
         self.box_size_range = box_size_range
         self.reward_type = reward_type
+        self.randomize_box_size = randomize_box_size
+        self.fixed_box_half_size = (
+            fixed_box_half_size if fixed_box_half_size is not None 
+            else DEFAULT_BOX_HALF_SIZE.copy()
+        )
         
         # Load the MuJoCo model
         self.physics = dm_mujoco.Physics.from_xml_path(SCENE_XML_PATH)
@@ -120,18 +134,30 @@ class BoxTouchEnv(gym.Env):
         self.np_random = np.random.default_rng(seed)
         return [seed]
     
-    def reset(self):
-        """Reset the environment with a new random box configuration."""
+    def reset(self, init_qpos=None):
+        """
+        Reset the environment with a new random box configuration.
+        
+        Args:
+            init_qpos: Optional (7,) array of initial joint positions.
+                If None, uses HOME_QPOS.
+        """
         # Reset physics
         self.physics.reset()
         
-        # Set robot to home configuration
+        # Set robot to initial configuration
         qpos = self.physics.data.qpos.copy()
-        qpos[:N_ARM_JOINTS] = HOME_QPOS
+        if init_qpos is not None:
+            qpos[:N_ARM_JOINTS] = np.array(init_qpos)
+        else:
+            qpos[:N_ARM_JOINTS] = HOME_QPOS
         
-        # Randomize box size
-        box_half_size = self.np_random.uniform(
-            self.box_size_range[0], self.box_size_range[1], size=3)
+        # Box size: either randomize or use fixed
+        if self.randomize_box_size:
+            box_half_size = self.np_random.uniform(
+                self.box_size_range[0], self.box_size_range[1], size=3)
+        else:
+            box_half_size = self.fixed_box_half_size.copy()
         self._current_box_size = box_half_size.copy()
         
         # Randomize box position on table
@@ -154,8 +180,9 @@ class BoxTouchEnv(gym.Env):
         self.physics.data.qpos[:] = qpos
         self.physics.data.qvel[:] = 0
         
-        # Set control to home position
-        self.physics.data.ctrl[:N_ARM_JOINTS] = HOME_QPOS
+        # Set control to initial joint position
+        init_ctrl = qpos[:N_ARM_JOINTS].copy()
+        self.physics.data.ctrl[:N_ARM_JOINTS] = init_ctrl
         
         # Forward to update derived quantities
         self.physics.forward()
